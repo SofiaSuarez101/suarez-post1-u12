@@ -53,5 +53,31 @@ def grover_noise_experiment(target="11", shots=1024):
     return p_ideal, p_noisy
 
 
+def grover_error_sweep(target="11", shots=4096, p2q_values=(0.0, 0.01, 0.03, 0.05, 0.10, 0.20)):
+    """Extra: barre la tasa de error de 2 qubits (p1q = p2q / 10) para mostrar
+    cómo cae la probabilidad de éxito al empeorar el hardware."""
+    qc = build_grover_circuit(target)
+    results = []
+    print("\nBarrido de error (p1q = p2q/10):")
+    for p2q in p2q_values:
+        sim = AerSimulator(noise_model=build_noise_model(p1q=p2q / 10, p2q=p2q))
+        counts = sim.run(qc, shots=shots).result().get_counts()
+        p_success = counts.get(target, 0) / shots
+        results.append(p_success)
+        print(f"  p2q={p2q:.2f} -> P(|{target}>) = {p_success * 100:.1f}%")
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot([p * 100 for p in p2q_values], [r * 100 for r in results], "o-")
+    ax.axhline(25, linestyle="--", color="gray", label="Adivinar al azar (25%)")
+    ax.set_xlabel("Error despolarizante por puerta de 2 qubits (%)")
+    ax.set_ylabel(f"P(éxito |{target}>) (%)")
+    ax.set_title("Grover 2 qubits: éxito vs. tasa de error")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(CAPTURAS / "grover_error_sweep.png", dpi=150)
+    return results
+
+
 if __name__ == "__main__":
     grover_noise_experiment()
+    grover_error_sweep()
