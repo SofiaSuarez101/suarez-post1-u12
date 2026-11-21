@@ -3,8 +3,6 @@
 **Arquitectura de Computadores · Unidad 12 · Post-contenido**
 Repositorio único para ambas partes: **Parte 1** (circuitos cuánticos en Qiskit) y **Parte 2** (impacto cuántico en ciberseguridad, en [`docs/analisis-pqc.md`](docs/analisis-pqc.md)).
 
-- **Autor:** `<Nombre Apellido>` · **Código:** `<código>` · **Fecha:** `<fecha>`
-
 ---
 
 ## Estructura del repositorio
@@ -43,7 +41,7 @@ python src/grover_noise.py
 
 Todo corre en el simulador clásico `AerSimulator`; no se necesita hardware cuántico ni cuenta de IBM Quantum. Los histogramas se guardan en `capturas/`.
 
-> **Convención de Qiskit (importante):** las cadenas de bits se leen en orden *little-endian*: en `"01"`, el bit derecho (`1`) es el **qubit 0** y el izquierdo (`0`) es el **qubit 1**. Esto afecta al oráculo de Grover (ver Experimento 3).
+> **Convención de Qiskit (importante):** las cadenas de bits se leen en orden _little-endian_: en `"01"`, el bit derecho (`1`) es el **qubit 0** y el izquierdo (`0`) es el **qubit 1**. Esto afecta al oráculo de Grover (ver Experimento 3).
 
 ---
 
@@ -63,11 +61,11 @@ c: 2/═══════════╩══╩═
 
 Hadamard sobre el qubit 0 crea la superposición (|0⟩+|1⟩)/√2; la CNOT la propaga al qubit 1 y produce **(|00⟩ + |11⟩)/√2**. Medir un qubit fija el resultado del otro: correlación perfecta, que es la huella del entrelazamiento.
 
-| Estado | Esperado | Obtenido (1024 shots) |
-|---|---|---|
-| `00` | ≈ 50 % | `<completar>` |
-| `11` | ≈ 50 % | `<completar>` |
-| `01`, `10` | 0 % (nunca aparecen) | `<completar>` |
+| Estado     | Esperado             | Obtenido (1024 shots) |
+| ---------- | -------------------- | --------------------- |
+| `00`       | ≈ 50 %               | `<completar>`         |
+| `11`       | ≈ 50 %               | `<completar>`         |
+| `01`, `10` | 0 % (nunca aparecen) | `<completar>`         |
 
 ![Histograma Bell](capturas/bell_histogram.png)
 
@@ -90,12 +88,12 @@ q_2: ──X──H───────[oráculo]──────────
 
 La regla de decisión es: si se mide `00` en los qubits de entrada, la función es **constante**; cualquier otro resultado indica **balanceada**.
 
-| Oráculo | Esperado | Obtenido |
-|---|---|---|
-| Constante | `{'00': 1024}` | `<completar>` |
+| Oráculo    | Esperado                                       | Obtenido      |
+| ---------- | ---------------------------------------------- | ------------- |
+| Constante  | `{'00': 1024}`                                 | `<completar>` |
 | Balanceada | Nunca `00` (para este oráculo, `{'11': 1024}`) | `<completar>` |
 
-**¿Por qué 1 sola evaluación del oráculo?** El ancilla en |−⟩ convierte el oráculo en un *phase kickback*: cada entrada x recibe fase (−1)^f(x) y el oráculo se consulta **una vez sobre la superposición de todas las entradas**. La Hadamard final hace interferir esas fases: si f es constante, todas las amplitudes se suman en |00⟩; si es balanceada, se cancelan exactamente en |00⟩. Clásicamente, en el peor caso hacen falta 2ⁿ⁻¹ + 1 = **3 evaluaciones** para n = 2, frente a 1 cuántica. La ventaja es mínima con n = 2 y crece exponencialmente con n.
+**¿Por qué 1 sola evaluación del oráculo?** El ancilla en |−⟩ convierte el oráculo en un _phase kickback_: cada entrada x recibe fase (−1)^f(x) y el oráculo se consulta **una vez sobre la superposición de todas las entradas**. La Hadamard final hace interferir esas fases: si f es constante, todas las amplitudes se suman en |00⟩; si es balanceada, se cancelan exactamente en |00⟩. Clásicamente, en el peor caso hacen falta 2ⁿ⁻¹ + 1 = **3 evaluaciones** para n = 2, frente a 1 cuántica. La ventaja es mínima con n = 2 y crece exponencialmente con n.
 
 ---
 
@@ -119,12 +117,12 @@ q_1: ┤ H ├─■────┤ H ├┤ X ├─■────┤ X ├┤
 
 **¿Por qué basta 1 iteración con N = 4?** El número óptimo de iteraciones es ≈ (π/4)·√N = π/4·2 ≈ 1.57, es decir 1 en la práctica. Con N = 4, el ángulo inicial cumple sin θ = 1/√4 → θ = 30°; una iteración rota el vector 2θ = 60° hacia el objetivo, hasta 3θ = 90°, que es exactamente el estado marcado. Por eso la probabilidad de éxito ideal es **100 %**.
 
-| Objetivo | Esperado (ideal) | Obtenido (1024 shots) | Veredicto |
-|---|---|---|---|
-| `00` | 100 % | `<completar>` | `<completar>` |
-| `01` | 100 % | `<completar>` | `<completar>` |
-| `10` | 100 % | `<completar>` | `<completar>` |
-| `11` | 100 % | `<completar>` | `<completar>` |
+| Objetivo | Esperado (ideal) | Obtenido (1024 shots) | Veredicto     |
+| -------- | ---------------- | --------------------- | ------------- |
+| `00`     | 100 %            | `<completar>`         | `<completar>` |
+| `01`     | 100 %            | `<completar>`         | `<completar>` |
+| `10`     | 100 %            | `<completar>`         | `<completar>` |
+| `11`     | 100 %            | `<completar>`         | `<completar>` |
 
 ![Grover 00](capturas/grover_00.png) ![Grover 01](capturas/grover_01.png)
 ![Grover 10](capturas/grover_10.png) ![Grover 11](capturas/grover_11.png)
@@ -142,11 +140,11 @@ noise_model.add_all_qubit_quantum_error(depolarizing_error(p1q, 1), ["h", "x"])
 noise_model.add_all_qubit_quantum_error(depolarizing_error(p2q, 2), ["cz"])
 ```
 
-| Configuración | Esperado | Obtenido |
-|---|---|---|
-| Sin ruido | 100 % | `<completar>` |
+| Configuración           | Esperado                              | Obtenido      |
+| ----------------------- | ------------------------------------- | ------------- |
+| Sin ruido               | 100 %                                 | `<completar>` |
 | Con ruido (0.1 % / 1 %) | ≈ 98 % (valor teórico exacto: 97.9 %) | `<completar>` |
-| Degradación | ≈ 2 puntos porcentuales | `<completar>` |
+| Degradación             | ≈ 2 puntos porcentuales               | `<completar>` |
 
 ![Comparación con y sin ruido](capturas/grover_noise_comparison.png)
 
@@ -156,14 +154,14 @@ noise_model.add_all_qubit_quantum_error(depolarizing_error(p2q, 2), ["cz"])
 
 Para visualizar mejor la degradación se barre `p2q` (con `p1q = p2q/10`) usando 4096 shots:
 
-| `p2q` | P(éxito `|11⟩`) teórica | Obtenida |
-|---|---|---|
-| 0 % | 100.0 % | `<completar>` |
-| 1 % | 97.9 % | `<completar>` |
-| 3 % | 93.9 % | `<completar>` |
-| 5 % | 90.0 % | `<completar>` |
-| 10 % | 81.1 % | `<completar>` |
-| 20 % | 65.9 % | `<completar>` |
+| `p2q` | P(éxito ` | 11⟩`) teórica | Obtenida |
+| ----- | --------- | ------------- | -------- |
+| 0 %   | 100.0 %   | `<completar>` |
+| 1 %   | 97.9 %    | `<completar>` |
+| 3 %   | 93.9 %    | `<completar>` |
+| 5 %   | 90.0 %    | `<completar>` |
+| 10 %  | 81.1 %    | `<completar>` |
+| 20 %  | 65.9 %    | `<completar>` |
 
 ![Barrido de error](capturas/grover_error_sweep.png)
 
@@ -205,5 +203,5 @@ docs: README con resultados y decisiones técnicas de la Parte 1
 
 ## Referencias
 
-- National Institute of Standards and Technology. (2024). *FIPS 203, 204, 205*. https://doi.org/10.6028/NIST.FIPS.203 · .204 · .205
-- Qiskit contributors. (s. f.). *Qiskit documentation* y *Qiskit Aer: noise models*. https://docs.quantum.ibm.com
+- National Institute of Standards and Technology. (2024). _FIPS 203, 204, 205_. https://doi.org/10.6028/NIST.FIPS.203 · .204 · .205
+- Qiskit contributors. (s. f.). _Qiskit documentation_ y _Qiskit Aer: noise models_. https://docs.quantum.ibm.com
