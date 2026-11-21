@@ -93,4 +93,150 @@ El NIST seleccionó además a HQC como KEM de respaldo en 2025 y trabaja en FN-D
 
 ---
 
+## 3. Plan de migración para tres perfiles organizacionales
+
+### 3.1 Principios comunes
+
+1. **Inventariar primero.** No se puede migrar lo que no se conoce: se cataloga cada uso de criptografía asimétrica (TLS, VPN, SSH, PKI, firma de código, firma de documentos, correo, bases de datos cifradas, HSM y dispositivos embebidos).
+2. **Priorizar por la regla de Mosca.** Si *X* (años de vida útil requerida del dato) + *Y* (años de migración) > *Z* (años hasta un CRQC), la organización ya está en riesgo. Los datos con *X* grande exigen actuar primero.
+3. **Confidencialidad antes que autenticidad.** La amenaza HNDL afecta a lo que se cifra hoy y se guardará mucho tiempo; una firma solo puede falsificarse una vez que existe el CRQC.
+4. **Híbrido en la transición.** Se combina un algoritmo clásico con uno PQC en paralelo, de modo que la conexión sea segura si cualquiera de los dos resiste.
+5. **Agilidad criptográfica.** Los algoritmos se parametrizan y se abstraen en bibliotecas o configuración, no se fijan en el código.
+
+### 3.2 Perfil A: hospital universitario (sensibilidad de 50 a 75 años)
+
+**Contexto.** Historias clínicas con horizonte de 50 a 75 años, portal de pacientes bajo TLS y firma de prescripciones con ECDSA. La amenaza HNDL es **crítica**: el tráfico interceptado hoy puede descifrarse en 10 a 15 años, cuando los datos siguen siendo sensibles.
+
+**1. Inventario de sistemas con criptografía asimétrica activa.** Portal de pacientes (TLS con ECDHE y ECDSA/RSA), VPN entre sedes, interfaces de interoperabilidad clínica (HL7/FHIR sobre TLS), PKI interna y firma de prescripciones (ECDSA), correo seguro, copias de seguridad cifradas con envoltura de clave RSA y dispositivos médicos con certificados de larga vida.
+
+**2. Clasificación por horizonte de sensibilidad.**
+
+| Dato | Horizonte | Riesgo dominante |
+|---|---|---|
+| Historia clínica y comunicaciones del portal | 50-75 años | HNDL (confidencialidad) |
+| Copias de seguridad cifradas | 50-75 años | HNDL si la clave se envuelve con RSA/ECC |
+| Prescripciones firmadas | Autenticidad en el momento de emisión y auditoría legal | Falsificación futura (menor) |
+| Telemetría operativa | Meses a pocos años | Bajo |
+
+**3. Estrategia híbrida.** El TLS del portal pasa de inmediato a intercambio de clave híbrido **X25519MLKEM768**. En VPN y en el envoltorio de claves de las copias de seguridad se combina ECDH con ML-KEM-768 (o ML-KEM-1024 para el repositorio de archivo de más larga vida). Los datos en reposo ya usan AES-256, que se mantiene. Las prescripciones se firman con **ML-DSA-65** (véase la decisión técnica del Paso 5), con doble firma ECDSA + ML-DSA durante la transición para no romper a los verificadores existentes.
+
+**4. Cronograma.**
+
+| Fase | Periodo | Hito verificable |
+|---|---|---|
+| 0. Inventario y priorización | Mes 0-3 | Catálogo criptográfico (CBOM) completo, con cada activo etiquetado por horizonte de sensibilidad |
+| 1. Confidencialidad en el perímetro | Mes 3-9 | Portal de pacientes y VPN negociando X25519MLKEM768 en ≥ 95 % de las sesiones (medido en logs del balanceador) |
+| 2. Re-envoltura de claves de archivo | Mes 6-18 | Claves de copias de seguridad re-envueltas con ML-KEM; AES-256 verificado en todo el almacenamiento |
+| 3. Firma de prescripciones y PKI | Mes 12-30 | Emisión con doble firma ECDSA + ML-DSA-65; PKI interna con jerarquía PQC piloto |
+| 4. Retiro del material clásico | Mes 30-48 | Verificadores actualizados; ECDSA/RSA retirados de los flujos de firma nuevos |
+
+**5. Riesgos y mitigaciones.**
+
+- *Dispositivos médicos que no pueden actualizarse:* segmentación de red y *proxy* de terminación TLS PQC delante del dispositivo.
+- *Tamaño de firmas y certificados:* medir latencia en el portal y habilitar compresión y caché de certificados.
+- *Implementaciones inmaduras:* usar bibliotecas validadas (por ejemplo, módulos con programa de validación CMVP) y mantener pruebas de interoperabilidad.
+- *Agilidad insuficiente en software heredado:* exigir cláusulas de agilidad criptográfica a los proveedores.
+
+### 3.3 Perfil B: startup de comercio electrónico (sensibilidad de 5 a 7 años)
+
+**Contexto.** Transacciones con AES-256 y TLS 1.3 (X25519 + ECDSA) y datos de tarjeta bajo PCI-DSS, con vida útil de 5 a 7 años. La urgencia es menor que en salud, pero el soporte de TLS híbrido para clientes es un diferenciador competitivo temprano y su costo es bajo.
+
+**1. Inventario.** Terminación TLS en CDN o balanceador, API de pagos, TLS hacia el procesador de pagos, certificados de servidor (ECDSA), firma de código y de artefactos de CI/CD, JWT firmados y VPN de administración.
+
+**2. Clasificación.** Datos de tarjeta y transacciones: 5-7 años (HNDL moderado). Datos de cuenta de usuario: 5-10 años. Tokens de sesión: minutos a horas (sin riesgo HNDL relevante).
+
+**3. Estrategia híbrida.** Se habilita **X25519MLKEM768** en el borde (CDN o balanceador) sin cambiar la cadena de certificados, que sigue siendo ECDSA en esta etapa. Se prueban certificados PQC en entornos internos. Se mantiene AES-256 y se migra de SHA-256 a SHA-384 donde convenga.
+
+**4. Cronograma.**
+
+| Fase | Periodo | Hito verificable |
+|---|---|---|
+| 0. Inventario | Mes 0-2 | Lista de endpoints TLS y dependencias de terceros |
+| 1. KEM híbrido en el borde | Mes 2-6 | Porcentaje de handshakes híbridos ≥ 70 % (clientes modernos) sin aumento significativo de errores ni de latencia p95 |
+| 2. Proveedores y procesador de pagos | Mes 6-18 | Evidencia contractual de hoja de ruta PQC de los proveedores críticos |
+| 3. Certificados y firma internos | Mes 18-36 | Certificados ML-DSA en entorno interno y firma de artefactos con doble firma |
+| 4. Evaluación de simplificación | Mes 36-60 | Decisión documentada sobre pasar a PQC puro según madurez y regulación |
+
+**5. Riesgos y mitigaciones.**
+
+- *Middleboxes que rompen ClientHello grandes:* pruebas de interoperabilidad y *fallback* controlado a X25519.
+- *Dependencia de la hoja de ruta de terceros (adquirentes, PCI):* seguimiento de las guías del PCI SSC.
+- *Latencia en redes móviles:* medición continua por segmento de red.
+
+### 3.4 Perfil C: entidad gubernamental de defensa (sensibilidad de 25 a 50 años)
+
+**Contexto.** Comunicaciones clasificadas, firma de documentos oficiales (PKI nacional) y VPN entre agencias, con vida útil de 25 a 50 años. La migración es **mandatoria** bajo la guía CNSA 2.0 de la NSA (2022), con plazos escalonados entre 2025 y 2033 (NSA, 2022).
+
+**1. Inventario.** PKI nacional (raíces e intermedias), VPN IPsec entre agencias, TLS interno, firma de firmware y de software, firma de documentos oficiales, enlaces de comunicaciones cifrados, módulos HSM y sistemas embebidos con ciclos de vida de décadas.
+
+**2. Clasificación.** Material clasificado y claves raíz: 25-50 años o más (HNDL y falsificación futura). Firma de firmware: vida del equipo, por lo que **la firma de código es prioritaria** porque un equipo desplegado no puede actualizarse fácilmente.
+
+**3. Estrategia.** CNSA 2.0 selecciona **ML-KEM-1024** para establecimiento de claves, **ML-DSA-87** para firma, AES-256 y SHA-384/512, y esquemas de firma basados en hash con estado (LMS/XMSS) para firma de software y firmware. La NSA no exige el modo híbrido como requisito, aunque puede admitirse por interoperabilidad mientras convivan sistemas de distintas fases. La entidad adopta híbrido solo en enlaces con socios que aún no soportan PQC puro, y diseña el resto hacia PQC puro.
+
+**4. Cronograma (alineado con CNSA 2.0).**
+
+| Fase | Periodo | Hito verificable |
+|---|---|---|
+| 0. Inventario y CBOM | 2026 | Catálogo completo de activos con criptografía asimétrica y fecha objetivo por sistema |
+| 1. Firma de software y firmware | 2025-2030 | Toda firma nueva de código/firmware con LMS/XMSS o ML-DSA-87; soporte y preferencia PQC desde 2025 |
+| 2. Equipos de red y VPN | 2026-2030 | VPN y equipos de red con ML-KEM-1024; uso exclusivo de CNSA 2.0 hacia 2030 |
+| 3. Navegadores, servidores y servicios en la nube | 2025-2033 | TLS con ML-KEM-1024 como preferido y luego exclusivo hacia 2033 |
+| 4. Sistemas operativos, equipos específicos y heredados | 2027-2033 | Reemplazo o aislamiento de lo que no pueda migrar antes de 2033 |
+
+**5. Riesgos y mitigaciones.**
+
+- *Plazos fijos con cadenas de suministro lentas:* exigir hojas de ruta PQC a proveedores con penalizaciones contractuales.
+- *Firmas con estado (LMS/XMSS):* una reutilización de estado rompe la seguridad, por lo que se gestiona el estado en HSM con procedimientos auditados.
+- *Equipos de larga vida sin actualización:* sustitución programada y aislamiento de red.
+
+> **Checkpoint 3.** Los tres perfiles incluyen inventario, clasificación por horizonte, estrategia híbrida o PQC según el caso, cronograma con al menos 3 hitos verificables, y riesgos con mitigaciones. La priorización sigue el horizonte de sensibilidad: A (confidencialidad inmediata) > C (plazo regulatorio) > B (estrategia oportunista de bajo costo).
+
+---
+
+## 4. Tamaños de clave y firma: PQC frente a criptografía clásica, e impacto en TLS 1.3 híbrido
+
+### 4.1 Tabla comparativa
+
+| Algoritmo | Tipo | Clave pública | Clave privada | Firma / ciphertext | Nivel de seguridad |
+|---|---|---|---|---|---|
+| RSA-3072 | Cifrado/firma clásico | ≈ 384 B (módulo; ≈ 390-400 B en DER) | ≈ 1600-2400 B (según codificación) | 384 B (firma) | ≈ 128 bits clásicos (no post-cuántico) |
+| ECDSA P-256 | Firma clásica | 64 B | 32 B | ≈ 70-72 B (DER) | ≈ 128 bits clásicos (no post-cuántico) |
+| X25519 | Intercambio de clave clásico | 32 B | 32 B | N/A (KEX) | ≈ 128 bits clásicos (no post-cuántico) |
+| ML-KEM-768 (FIPS 203) | KEM post-cuántico | 1184 B | 2400 B | 1088 B (ciphertext) | Nivel NIST 3 (≈ AES-192) |
+| ML-DSA-65 (FIPS 204) | Firma post-cuántica | 1952 B | 4032 B | 3309 B | Nivel NIST 3 (≈ AES-192) |
+| SLH-DSA-128s (FIPS 205) | Firma post-cuántica (hash) | 32 B | 64 B | 7856 B | Nivel NIST 1 (≈ AES-128) |
+
+*Fuentes: NIST (2024a, 2024b, 2024c) para las filas PQC; las filas clásicas provienen de los parámetros estándar de cada algoritmo (la clave privada y la codificación DER de RSA varían con el formato).*
+
+**Factores de crecimiento calculados:**
+
+- Clave pública de ML-KEM-768 frente a X25519: 1184 / 32 = **37×**.
+- Firma de ML-DSA-65 frente a ECDSA P-256: 3309 / 72 ≈ **46×**.
+- Firma de SLH-DSA-128s frente a ECDSA P-256: 7856 / 72 ≈ **109×**.
+- Firma de ML-DSA-65 frente a RSA-3072: 3309 / 384 ≈ **8,6×**.
+
+### 4.2 Impacto en un handshake TLS 1.3 híbrido X25519 + ML-KEM-768
+
+El intercambio de clave híbrido se negocia como el grupo **X25519MLKEM768** (anteriormente desplegado como X25519Kyber768Draft00 por Chrome y Cloudflare). Los campos `key_share` crecen así:
+
+| Mensaje | Solo X25519 | Híbrido X25519 + ML-KEM-768 | Aumento |
+|---|---|---|---|
+| ClientHello (`key_share`) | 32 B | 32 + 1184 = **1216 B** | +1184 B (≈ 38×) |
+| ServerHello (`key_share`) | 32 B | 32 + 1088 = **1120 B** | +1088 B (≈ 35×) |
+
+El aumento total del intercambio es de **≈ 2,3 KB**. Con una ventana de congestión inicial típica de TCP de 10 segmentos (≈ 14,6 KB con MSS de 1460 B), el ClientHello de ≈ 1,2 KB más el resto de extensiones suele caber en uno o dos segmentos, por lo que **en el caso común el híbrido no añade rondas de red**. Las implementaciones desplegadas reportan este comportamiento.
+
+**Efecto de una cadena de certificados con ML-DSA.** Si, además del intercambio híbrido, se autentica con ML-DSA-65, aparecen tres firmas (certificado hoja, certificado intermedio y `CertificateVerify`) y dos claves públicas. La estimación solo de esos campos (sin otros datos del certificado ni SCTs) es:
+
+| Autenticación | Cálculo | Total aproximado |
+|---|---|---|
+| ECDSA P-256 | 3 × 72 B (firmas) + 2 × 64 B (claves) | ≈ **344 B** |
+| ML-DSA-65 | 3 × 3309 B (firmas) + 2 × 1952 B (claves) | ≈ **13 831 B** |
+
+El resultado, ≈ 13,8 KB frente a ≈ 0,3 KB (unas 40 veces más), se acerca al tamaño de la ventana inicial de congestión (≈ 14,6 KB). Sumado el resto del handshake, es probable que los datos se fragmenten en más segmentos y, **en redes con alta latencia o pérdida de paquetes, requieran una ronda adicional** que aumenta la latencia percibida. Por eso se recomienda: (1) desplegar primero el KEM híbrido, que aporta protección contra HNDL con costo mínimo; (2) retrasar los certificados PQC hasta contar con mitigaciones (compresión de certificados, omisión de intermedios, nuevos formatos de certificado); y (3) medir en el entorno real.
+
+> **Checkpoint 4.** La tabla incluye los seis algoritmos con tamaños en bytes y fuentes; el cálculo del `key_share` híbrido (1216 B y 1120 B) está explicado y se detallan las condiciones en que se añaden o no rondas de red.
+
+---
+
 
