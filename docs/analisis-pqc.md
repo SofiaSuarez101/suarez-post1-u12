@@ -239,4 +239,58 @@ El resultado, ≈ 13,8 KB frente a ≈ 0,3 KB (unas 40 veces más), se acerca al
 
 ---
 
+## 5. Decisión técnica: ¿qué algoritmo NIST firma las prescripciones del Perfil A?
 
+**Decisión: ML-DSA-65 como algoritmo principal, con SLH-DSA como respaldo para activos de larga vida.**
+
+En primer lugar, **ML-KEM queda descartado de entrada**, porque es un mecanismo de encapsulamiento de claves (acuerda un secreto compartido) y no un esquema de firma; no ofrece autenticidad ni no repudio. Firmar una prescripción exige un esquema de firma digital, así que la elección real es entre ML-DSA y SLH-DSA.
+
+Entre ambos, los datos del Paso 4 favorecen a **ML-DSA-65**: su firma ocupa 3309 B frente a 7856 B de SLH-DSA-128s (≈ 2,4× menos) y, sobre todo, firma y verifica mucho más rápido. Para un hospital que emite miles de prescripciones por día con un portal de baja latencia, el tamaño de la firma afecta el almacenamiento y la transmisión, y la lentitud de firma de SLH-DSA afectaría la experiencia del usuario y el rendimiento del servidor.
+
+El argumento a favor de SLH-DSA es su asunción de seguridad más conservadora (solo depende de la resistencia del hash, sin asumir la dificultad de MLWE). Sin embargo, ese argumento pesa menos en este caso. La amenaza HNDL aplica a la **confidencialidad** de datos cifrados que se guardan durante décadas; no aplica de la misma forma a la **autenticidad** de una firma, cuyo propósito es probar quién emitió la prescripción en el momento de emitirla, y que solo podría falsificarse cuando exista un computador cuántico capaz de romper el esquema. El horizonte de 50 a 75 años del Perfil A rige, por tanto, la elección del KEM del portal (híbrido con ML-KEM desde ahora), no la del algoritmo de firma. Además, durante la transición se recomienda **doble firma ECDSA + ML-DSA-65** y se reserva **SLH-DSA** (diversidad criptográfica) para certificados raíz o de larga vida, donde la conservadurismo pesa más que el rendimiento y la frecuencia de firma es baja. La agilidad criptográfica permite sustituir ML-DSA por otro algoritmo si en el futuro se debilitara.
+
+---
+
+## 6. Decisión técnica: ¿modo híbrido permanente o etapa de transición para el Perfil B?
+
+**Decisión: adoptar el modo híbrido (X25519 + ML-KEM-768) desde ahora, entendido como etapa de transición y no como estado permanente.**
+
+El análisis del Paso 4 muestra que el sobrecosto del KEM híbrido es pequeño: ≈ 2,3 KB adicionales en el intercambio, que en el caso común cabe en la ventana inicial de TCP y no agrega rondas de red. Con ese costo bajo, el beneficio justifica adoptarlo ya, y no esperar a que la migración sea obligatoria: el Perfil B gana protección frente a HNDL para datos de 5 a 7 años y ofrece compatibilidad temprana con navegadores y CDNs que ya negocian el híbrido por defecto.
+
+El híbrido protege contra dos fallas **no correlacionadas**: (1) que ECC sea roto por un computador cuántico suficientemente grande, y (2) que ML-KEM o ML-DSA, estandarizados en 2024 y con muchos menos años de escrutinio público que ECC (décadas), tengan una debilidad clásica aún no descubierta. Esa doble protección es especialmente valiosa mientras los algoritmos PQC acumulan años de análisis criptográfico, porque la ruptura de uno de los dos componentes no compromete la sesión.
+
+Sin embargo, el híbrido tiene un costo permanente en bytes, complejidad de implementación y superficie de ataque (dos algoritmos que mantener). Por ello conviene planearlo como **puente**: cuando ML-KEM y ML-DSA acumulen confianza y adopción, y los plazos regulatorios (por ejemplo CNSA 2.0 hacia 2033) maduren, el Perfil B puede simplificar hacia PQC puro. Como su exigencia regulatoria y su horizonte de datos son menores que los del Perfil C, puede hacerlo más tarde y con menor urgencia, tras una evaluación documentada en la fase 4 de su cronograma.
+
+> **Checkpoint 5.** Las dos decisiones técnicas (Pasos 5 y 6) están incluidas en este documento y superan las 100 palabras cada una.
+
+---
+
+## 7. Conclusiones
+
+1. La computación cuántica rompe por completo la criptografía asimétrica actual (RSA, ECDH, ECDSA) mediante el algoritmo de Shor, y debilita sin romper a la simétrica y a los hash mediante el algoritmo de Grover; los remedios son, respectivamente, reemplazar por PQC y aumentar el tamaño de clave o de salida.
+2. El NIST estandarizó ML-KEM (FIPS 203) para el intercambio de claves, y ML-DSA (FIPS 204) y SLH-DSA (FIPS 205) para firmas, con ML-DSA como opción general y SLH-DSA como respaldo conservador.
+3. El costo principal de la migración es el tamaño: claves públicas y firmas 30 a 110 veces mayores que las de ECC. El KEM híbrido tiene un impacto pequeño en TLS, mientras que las cadenas de certificados PQC pueden añadir rondas de red en enlaces de alta latencia.
+4. La prioridad de migración la define el horizonte de sensibilidad de los datos: confidencialidad de larga vida primero (Perfil A), plazos regulatorios (Perfil C) y adopción oportunista de bajo costo (Perfil B).
+5. La agilidad criptográfica es la medida de mayor valor a largo plazo: permite cambiar de algoritmo sin rediseñar los sistemas.
+
+---
+
+## Referencias (APA 7)
+
+Grover, L. K. (1996). A fast quantum mechanical algorithm for database search. *Proceedings of the 28th Annual ACM Symposium on Theory of Computing*, 212-219. https://doi.org/10.1145/237814.237866
+
+National Institute of Standards and Technology. (2024a). *Module-lattice-based key-encapsulation mechanism standard* (FIPS PUB 203). U.S. Department of Commerce. https://doi.org/10.6028/NIST.FIPS.203
+
+National Institute of Standards and Technology. (2024b). *Module-lattice-based digital signature standard* (FIPS PUB 204). U.S. Department of Commerce. https://doi.org/10.6028/NIST.FIPS.204
+
+National Institute of Standards and Technology. (2024c). *Stateless hash-based digital signature standard* (FIPS PUB 205). U.S. Department of Commerce. https://doi.org/10.6028/NIST.FIPS.205
+
+National Security Agency. (2022). *Commercial National Security Algorithm Suite 2.0* (Cybersecurity advisory). https://media.defense.gov/2022/Sep/07/2003071834/-1/-1/0/CSA_CNSA_2.0_ALGORITHMS_.PDF
+
+Open Quantum Safe. (s. f.). *liboqs: C library for prototyping and experimenting with quantum-resistant cryptography*. https://openquantumsafe.org/liboqs/
+
+Internet Engineering Task Force. (2026). *ML-DSA for JOSE and COSE* (RFC 9964). RFC Editor. https://www.rfc-editor.org/rfc/rfc9964
+
+Shor, P. W. (1994). Algorithms for quantum computation: Discrete logarithms and factoring. *Proceedings of the 35th Annual Symposium on Foundations of Computer Science*, 124-134. https://doi.org/10.1109/SFCS.1994.365700
+
+*Pendiente antes de entregar:* si se consultan la guía CISA/NSA/NIST (2023) y ETSI GR QSC 006 mencionadas en el enunciado, agregarlas aquí en formato APA con los datos del documento que se haya leído.
